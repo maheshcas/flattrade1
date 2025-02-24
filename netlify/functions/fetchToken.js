@@ -4,10 +4,11 @@ const crypto = require("crypto");
 exports.handler = async (event) => {
   try {
     const { api_key, request_code, api_secret } = JSON.parse(event.body);
+    const hashedSecret = crypto.createHash("sha256").update(api_secret).digest("hex");
     const response = await axios.post("https://authapi.flattrade.in/trade/apitoken", {
       api_key,
       request_code,
-      api_secret,
+      api_secret: hashedSecret,
     });
     return {
       statusCode: 200,
