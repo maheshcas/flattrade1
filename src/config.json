@@ -1,0 +1,6 @@
+{
+    "authUrl": "https://auth.flattrade.in/",
+    "redirectUri": "http://localhost:3000/login",
+    "tokenUrl": "https://authapi.flattrade.in/trade/apitoken",
+    "apiSecret":"2025.8199821099b74d748969f3143d73a3b1481bebed356ccf4d"
+  }
