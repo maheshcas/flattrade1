@@ -122,14 +122,14 @@ const MainPage = () => {
         const apiSecretInput = crypto
           .SHA256(`${apiKey}${code}${config.apiSecret}`)
           .toString();
-          const response = await axios.post(
-            "/api/fetchToken",
-            {
-              api_key: apiKey,
-              request_code: code,
-              api_secret: apiSecretInput,
-            }
-          );
+        const response = await axios.post(
+  "/api/fetchToken",
+  {
+    api_key: apiKey,
+    request_code: code,
+    api_secret: apiSecretInput,
+  }
+);
         setAuthData((prev) => ({
           ...prev,
           token: response.data.token,
