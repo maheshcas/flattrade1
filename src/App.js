@@ -1,196 +1,148 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { BrowserRouter as Router, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { AppBar, Toolbar, Typography, Box, Container, Paper, Button, TextField, CircularProgress } from "@mui/material";
+import {
+  BrowserRouter as Router,
+  Route,
+  Routes,
+  useNavigate,
+} from "react-router-dom";
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  Box,
+  Container,
+  Paper,
+  Button,
+  TextField,
+  CircularProgress,
+} from "@mui/material";
 import axios from "axios";
 import crypto from "crypto-js";
-import config from "./config.json"; // Property file for URIs
+import config from "./config.json";
+import ApiHandler from "./components/ApiHandler";
+import Dashboard from "./components/Dashboard";
 
-// Global Auth Context
 const AuthContext = createContext();
 
-const AuthProvider = ({ children }) => {
-  const [authData, setAuthData] = useState(() => {
-    const storedData = JSON.parse(localStorage.getItem("authData"));
-    return storedData || { code: "", client: "", apiKey: config.defaultApiKey || "", token: "", status: "" };
-  });
+const ApiKeyPage = () => {
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    localStorage.setItem("authData", JSON.stringify(authData));
-  }, [authData]);
+  const handleApiKeySubmit = () => {
+    if (apiKeyInput) {
+      localStorage.setItem("apiKey", apiKeyInput);
+      navigate("/");
+    }
+  };
 
   return (
-    <AuthContext.Provider value={{ authData, setAuthData }}>
+    <Container maxWidth="sm">
+      <Paper elevation={3} className="p-6 mt-16">
+        <Typography variant="h5" gutterBottom>
+          Enter API Key
+        </Typography>
+        <TextField
+          fullWidth
+          label="API Key"
+          value={apiKeyInput}
+          onChange={(e) => setApiKeyInput(e.target.value)}
+          variant="outlined"
+          margin="normal"
+        />
+        <Button variant="contained" fullWidth onClick={handleApiKeySubmit}>
+          Submit
+        </Button>
+      </Paper>
+    </Container>
+  );
+};
+
+const AuthHandler = ({ children }) => {
+  const [apiKey, setApiKey] = useState(localStorage.getItem("apiKey") || "");
+  const [authDetails, setAuthDetails] = useState({ code: null, client: null });
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  const flattradeAuthUrl = `https://auth.flattrade.in/?app_key=${apiKey}`;
+
+  useEffect(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const code = queryParams.get("code");
+    const client = queryParams.get("client");
+
+    if (code && client) {
+      setAuthDetails({ code, client });
+      localStorage.setItem("code", code);
+      localStorage.setItem("client", client);
+      fetchToken(apiKey, code);
+    } else if (!apiKey) {
+      navigate("/api-key");
+    } else {
+      window.location.href = flattradeAuthUrl;
+    }
+  }, [apiKey]);
+
+  const fetchToken = async (key, code) => {
+    setLoading(true);
+    const shaSecret = crypto
+      .SHA256(key + code + config.api_secret)
+      .toString();
+    try {
+      const response = await axios.post("/api/fetchToken", {
+        api_key: key,
+        request_code: code,
+        api_secret: shaSecret,
+      });
+      if (response.data?.token) {
+        localStorage.setItem("token", response.data.token);
+      }
+    } catch (error) {
+      console.error("Token fetch failed:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <AuthContext.Provider value={{ authDetails, loading }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-const useAuth = () => useContext(AuthContext);
-
-// Header Component
-const Header = () => (
-  <AppBar position="static">
-    <Toolbar>
-      <Typography variant="h6">Flattrade Option Trading App</Typography>
-    </Toolbar>
-  </AppBar>
-);
-
-// Footer Component
-const Footer = () => (
-  <Box component="footer" sx={{ p: 2, backgroundColor: "#f5f5f5", textAlign: "center" }}>
-    <Typography variant="body2">© 2025 Flattrade Option Trading App. All rights reserved.</Typography>
-  </Box>
-);
-
-// Right Panel Component
-const RightPanel = () => (
-  <Paper sx={{ p: 2, height: "100%", backgroundColor: "#fafafa" }}>
-    <Typography variant="h6">Right Panel</Typography>
-    <Typography variant="body2">Future enhancements like option chain data will appear here.</Typography>
-  </Paper>
-);
-
-// API Key Input Page
-const ApiKeyPage = () => {
-  const { setAuthData } = useAuth();
-  const navigate = useNavigate();
-  const [apiKey, setApiKey] = useState("");
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (apiKey.trim()) {
-      setAuthData((prev) => ({ ...prev, apiKey }));
-      localStorage.setItem("apiKey", apiKey);
-      const flattradeAuthUrl = `${config.authUrl}?app_key=${apiKey}`;
-      window.location.href = flattradeAuthUrl;
-    }
-  };
+const AuthenticatedPage = () => {
+  const { authDetails, loading } = useContext(AuthContext);
 
   return (
-    <Container maxWidth="sm" sx={{ mt: 10, textAlign: "center" }}>
-      <Typography variant="h5" gutterBottom>Enter API Key</Typography>
-      <form onSubmit={handleSubmit}>
-        <TextField
-          label="API Key"
-          variant="outlined"
-          fullWidth
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          required
-          sx={{ mb: 2 }}
-        />
-        <Button variant="contained" color="primary" type="submit" fullWidth>
-          Proceed to Authentication
-        </Button>
-      </form>
+    <Container>
+      {loading ? (
+        <CircularProgress />
+      ) : (
+        <Box className="mt-8">
+          <Typography variant="h6">Code: {authDetails.code}</Typography>
+          <Typography variant="h6">Client: {authDetails.client}</Typography>
+          <ApiHandler />
+          <Dashboard />
+        </Box>
+      )}
     </Container>
   );
 };
 
-// Main Page Layout (Fetches token immediately after login flow)
-const MainPage = () => {
-  const { authData, setAuthData } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchToken = async (apiKey, code) => {
-      try {
-        setAuthData((prev) => ({ ...prev, status: "Fetching token..." }));
-        const apiSecretInput = crypto.SHA256(`${apiKey}${code}${config.apiSecret}`).toString();
-        const response = await axios.post("https://authapi.flattrade.in/trade/apitoken", {
-          api_key: apiKey,
-          request_code: code,
-          api_secret: apiSecretInput
-        });
-        setAuthData((prev) => ({
-          ...prev,
-          token: response.data.token,
-          status: "Token fetched successfully"
-        }));
-      } catch (error) {
-        setAuthData((prev) => ({ ...prev, status: `Token fetch failed: ${error.message}` }));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const params = new URLSearchParams(location.search);
-    const code = params.get("code");
-    const client = params.get("client");
-    const apiKey = localStorage.getItem("apiKey") || authData.apiKey;
-
-    if (code && client && apiKey) {
-      setAuthData((prev) => ({ ...prev, code, client, apiKey }));
-      fetchToken(apiKey, code);
-    } else if (!apiKey) {
-      navigate("/");
-    } else {
-      setLoading(false);
-    }
-  }, [location.search, navigate, setAuthData, authData.apiKey]);
-
-  if (loading) {
-    return (
-      <Container maxWidth="sm" sx={{ mt: 10, textAlign: "center" }}>
-        <CircularProgress />
-        <Typography variant="h6">Fetching token, please wait...</Typography>
-      </Container>
-    );
-  }
-
-  return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <Header />
-      <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <Container maxWidth="md" sx={{ flex: 3, p: 2 }}>
-          <Typography variant="h5" gutterBottom>Main Content</Typography>
-          <Paper sx={{ p: 2, backgroundColor: "#f5f5f5" }}>
-            <Typography variant="body1"><strong>API Key:</strong> {authData.apiKey}</Typography>
-            <Typography variant="body1"><strong>Client ID:</strong> {authData.client}</Typography>
-            <Typography variant="body1"><strong>Authorization Code:</strong> {authData.code}</Typography>
-            <Typography variant="body1"><strong>Token:</strong> {authData.token}</Typography>
-            <Typography variant="body1"><strong>Status:</strong> {authData.status}</Typography>
-          </Paper>
-        </Container>
-        <Box sx={{ width: 300, p: 2, borderLeft: "1px solid #ddd" }}>
-          <RightPanel />
-        </Box>
-      </Box>
-      <Footer />
-    </Box>
-  );
-};
-
-// Main App Component
-const App = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const apiKey = localStorage.getItem("apiKey");
-    if (params.get("code") && params.get("client") && apiKey) {
-      navigate("/main" + location.search, { replace: true });
-    }
-  }, [location, navigate]);
-
-  return (
-    <AuthProvider>
-      <Routes>
-        <Route path="/" element={<ApiKeyPage />} />
-        <Route path="/main" element={<MainPage />} />
-      </Routes>
-    </AuthProvider>
-  );
-};
-
-export default function RootApp() {
+export default function App() {
   return (
     <Router>
-      <App />
+      <AppBar position="static">
+        <Toolbar>
+          <Typography variant="h6">Flattrade Option Trading App</Typography>
+        </Toolbar>
+      </AppBar>
+      <AuthHandler>
+        <Routes>
+          <Route path="/api-key" element={<ApiKeyPage />} />
+          <Route path="/" element={<AuthenticatedPage />} />
+        </Routes>
+      </AuthHandler>
     </Router>
   );
 }
