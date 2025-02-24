@@ -10,29 +10,11 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [apiKey, setApiKey] = useState(localStorage.getItem("apiKey") || "");
   const [authDetails, setAuthDetails] = useState({ code: null, client: null });
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   const flattradeAuthUrl = `https://auth.flattrade.in/?app_key=${apiKey}`;
-  const apiEndpoints = [
-    "https://pi.flattrade.in/api/v1/marketdata/nifty50",
-    "https://another-api.example.com/marketdata",
-  ];
-
-  useEffect(() => {
-    const fetchNiftyPrice = async () => {
-      try {
-        const response = await fetch(apiEndpoints[0]);
-        const data = await response.json();
-        setNiftyPrice(data?.strikePrice || "Unavailable");
-      } catch (error) {
-        console.error("Error fetching Nifty 50 price:", error);
-      }
-    };
-
-    fetchNiftyPrice();
-    const interval = setInterval(fetchNiftyPrice, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  const apiEndpoints = ["https://pi.flattrade.in/api/v1/marketdata/nifty50"];
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -57,8 +39,11 @@ export default function App() {
   }, [apiKey]);
 
   const fetchToken = async (key, code) => {
+    setLoading(true);
     const crypto = await import("crypto-js");
-    const shaSecret = crypto.SHA256(key + code + "2025.8199821099b74d748969f3143d73a3b1481bebed356ccf4d").toString();
+    const shaSecret = crypto
+      .SHA256(key + code + "2025.8199821099b74d748969f3143d73a3b1481bebed356ccf4d")
+      .toString();
     try {
       const response = await fetch("/.netlify/functions/fetchToken", {
         method: "POST",
@@ -68,27 +53,52 @@ export default function App() {
       const data = await response.json();
       if (data?.token) {
         localStorage.setItem("token", data.token);
+        fetchNiftyPrice();
       }
     } catch (error) {
       console.error("Token fetch failed:", error);
+    } finally {
+      setLoading(false);
     }
   };
+
+  const fetchNiftyPrice = async () => {
+    try {
+      const response = await fetch(apiEndpoints[0]);
+      const data = await response.json();
+      setNiftyPrice(data?.strikePrice || "Unavailable");
+    } catch (error) {
+      console.error("Error fetching Nifty 50 price:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (authDetails.code && authDetails.client) {
+      fetchNiftyPrice();
+      const interval = setInterval(fetchNiftyPrice, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [authDetails]);
 
   return (
     <div className="flex flex-col min-h-screen">
       <Header niftyPrice={niftyPrice} />
       <main className="flex-grow p-4">
-        {authDetails.code && authDetails.client ? (
-          <div>
-            <h2 className="text-xl font-bold mb-4">Authentication Details</h2>
-            <p>Code: {authDetails.code}</p>
-            <p>Client: {authDetails.client}</p>
-          </div>
+        {loading ? (
+          <p>Loading authentication and market data...</p>
         ) : (
-          <p>Redirecting to authentication...</p>
+          authDetails.code && authDetails.client ? (
+            <>
+              <h2 className="text-xl font-bold mb-4">Authentication Details</h2>
+              <p>Code: {authDetails.code}</p>
+              <p>Client: {authDetails.client}</p>
+              <ApiHandler apiEndpoints={apiEndpoints} />
+              <Dashboard />
+            </>
+          ) : (
+            <p>Redirecting to authentication...</p>
+          )
         )}
-        <ApiHandler apiEndpoints={apiEndpoints} />
-        <Dashboard />
       </main>
       <Footer
         currentTime={currentTime.toLocaleString("en-IN", {
