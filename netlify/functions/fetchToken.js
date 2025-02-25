@@ -21,6 +21,8 @@ export async function handler(event) {
       };
     }
 
+    const hashedSecret = crypto.createHash("sha256").update(api_secret).digest("hex");
+
     const response = await fetch("https://authapi.flattrade.in/trade/apitoken", {
       method: "POST",
       headers: {
@@ -29,7 +31,7 @@ export async function handler(event) {
       body: JSON.stringify({
         api_key,
         request_code,
-        api_secret,
+        api_secret: hashedSecret,
       }),
     });
 
