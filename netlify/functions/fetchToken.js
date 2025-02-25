@@ -1,7 +1,7 @@
-const fetch = require("node-fetch");
-const crypto = require("crypto");
+import fetch from "node-fetch";
+import crypto from "crypto";
 
-exports.handler = async (event) => {
+export async function handler(event) {
   try {
     if (event.httpMethod !== "POST") {
       return {
@@ -50,4 +50,4 @@ exports.handler = async (event) => {
       body: JSON.stringify({ message: error.message }),
     };
   }
-};
+}
