@@ -1,3 +1,5 @@
+// netlify/functions/fetchToken.js
+
 import fetch from "node-fetch";
 import crypto from "crypto";
 
